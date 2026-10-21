@@ -1,118 +1,112 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# rapidcharge-api
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS backend for RapidCharge Hub: REST API, WebSocket gateway, background jobs, and the SQL Server and Redis integration.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Tech
 
-## Description
+NestJS · TypeScript · SQL Server (`mssql`) · Redis (`ioredis`) · BullMQ · Socket.io · Passport (local, JWT, Google OAuth 2.0) · class-validator · Helmet
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Folder structure
 
-## Project setup
-
-```bash
-$ npm install
+```
+src/
+├─ config/             Validated environment configuration
+├─ common/             Guards, filters, pipes, interceptors, middleware, decorators
+├─ infrastructure/
+│  ├─ database/        mssql connection pool
+│  ├─ redis/           Redis client and helper service
+│  ├─ queue/           BullMQ setup
+│  └─ logger/
+├─ modules/
+│  ├─ auth/            Local login, Google OAuth, token rotation, roles
+│  ├─ users/
+│  ├─ stations/        CRUD and Redis geo search
+│  ├─ chargers/        Status and free-slot query (recursive CTE)
+│  ├─ bookings/        Redis hold + usp_book_charger
+│  ├─ sessions/        Start and stop, usp_end_session_and_bill
+│  ├─ payments/        Webhooks and idempotency keys
+│  ├─ analytics/       Peak-hour and utilization CTEs
+│  ├─ notifications/
+│  ├─ audit/
+│  └─ health/          Liveness and readiness checks
+├─ realtime/           Socket.io gateway and Redis subscriber
+└─ jobs/processors/    Hold expiry and no-show release
+test/                  unit, e2e, load
 ```
 
-## Compile and run the project
+## Setup
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cp .env.example .env     # fill in DB, Redis, JWT and Google values
+npm install
+npm run start:dev
 ```
 
-## Run tests
+Requires SQL Server and Redis running (`docker compose up -d` from the repo root) and the scripts in `../database/migrations` applied.
 
-```bash
-# unit tests
-$ npm run test
+Generate a JWT secret with `openssl rand -base64 48`.
 
-# e2e tests
-$ npm run test:e2e
+## Environment variables
 
-# test coverage
-$ npm run test:cov
-```
+| Variable | Purpose |
+|---|---|
+| `PORT`, `API_PREFIX` | Server port and route prefix (`api/v1`) |
+| `CORS_ORIGIN`, `FRONTEND_URL` | Allowed browser origin and OAuth redirect target |
+| `COOKIE_SECURE` | `true` in production (HTTPS only cookies) |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME` | SQL Server login (least privilege, never `sa`) |
+| `DB_ENCRYPT`, `DB_TRUST_SERVER_CERT` | TLS to SQL Server |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | Redis connection |
+| `JWT_ACCESS_SECRET`, `JWT_ACCESS_TTL`, `REFRESH_TTL_DAYS` | Token settings |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Google OAuth |
+| `THROTTLE_TTL_SECONDS`, `THROTTLE_LIMIT` | Rate limiting |
+| `RAZORPAY_*` | Payments (test mode) |
 
-## Deployment
+## API overview
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Base path: `/api/v1`
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+| Method | Route | Access | Description |
+|---|---|---|---|
+| POST | `/auth/login` | Public | Email and password login |
+| GET | `/auth/google` | Public | Start Google OAuth |
+| GET | `/auth/google/callback` | Public | OAuth callback |
+| POST | `/auth/oauth/exchange` | Public | Exchange one-time code for tokens |
+| POST | `/auth/refresh` | Cookie | Rotate refresh token |
+| POST | `/auth/logout` | Cookie | Revoke refresh token |
+| GET | `/stations/nearby` | Driver | Redis geo search (`lat`, `lng`, `radius`, `connector`) |
+| GET | `/chargers/:id/slots` | Driver | Free slots for a date |
+| POST | `/bookings` | Driver | Hold and create a booking |
+| POST | `/sessions/start` | Driver | Start charging |
+| POST | `/sessions/:id/stop` | Driver | Stop and bill |
+| POST | `/payments/webhook` | Signed | Payment provider webhook |
+| GET | `/analytics/peak-hours` | Owner | Peak-hour analysis |
+| GET | `/analytics/utilization` | Owner | Utilization trend |
+| GET | `/health` | Public | Health check |
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+## Error codes from stored procedures
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+| SQL error | Meaning | HTTP |
+|---|---|---|
+| 50001 | Invalid time range | 400 |
+| 50002 | Charger unavailable | 400 |
+| 50003 | Slot already booked | 409 |
+| 50010 | Session not active | 409 |
+| 50020 | Provider email not verified | 403 |
 
-## Observability
+## Scripts
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+| Command | Description |
+|---|---|
+| `npm run start:dev` | Start with watch mode |
+| `npm run build` | Compile for production |
+| `npm run lint` | Lint the code |
+| `npm test` | Unit tests |
+| `npm run test:e2e` | End-to-end tests |
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+## Security notes
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-This project is already instrumented. Create a free account at [observe.nestjs.com](https://observe.nestjs.com), add an application, and paste the generated app key and secret into the `ObserveModule.forRoot()` call in `src/app.module.ts`.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Every DTO uses `whitelist` and `forbidNonWhitelisted` validation.
+- All SQL uses parameters; no string-built queries.
+- Roles come from the database, never from the client.
+- Rate limiting is applied to login, OAuth exchange, booking and payments.
+- See `../SECURITY.md` for the full policy.
