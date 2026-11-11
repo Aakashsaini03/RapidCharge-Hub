@@ -2,20 +2,22 @@ import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { AuthModule } from './auth/auth.module.js';
+import { AuthModule } from './apis/auth/auth.module.js';
+import { ConfigModule } from '@nestjs/config';
+import { dataSourceOptions } from '../db/config/typeorm.config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { UtilsModule } from './common/util/util.module.js';
+import { UsersModule } from './apis/users/users.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'rapidcharge_hub_api',
-    }),
+    ConfigModule.forRoot({ isGlobal: true }),
+    TypeOrmModule.forRoot(dataSourceOptions),
     AuthModule,
+    UtilsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
