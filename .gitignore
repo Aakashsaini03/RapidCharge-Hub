@@ -58,3 +58,7 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+vitest.config*.js
+vitest.config*.js.map
+vitest.config*.d.ts
+vitest.config*.d.mts
